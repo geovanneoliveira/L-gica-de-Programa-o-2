@@ -1,11 +1,15 @@
 #include <SPI.h>
 #include <MFRC522.h>
 #include <LiquidCrystal_I2C.h>
-#include <stdio.h>
 #include <IRremote.h>
 #include <avr/wdt.h>
+#include <string.h>
 
-
+#define LEDGREEN 8
+#define BUTTON1 4
+#define BUTTON2 5
+#define BUTTON3 6
+#define BUTTON4 7
 #define AR 0
 #define DW 1
 #define SS_PIN 10
@@ -37,11 +41,10 @@ int temp_AR = 18;
 
 
 // --- Codigos IR ---
-
 const PROGMEM unsigned int irSignal_OnAr[] = {8200,4200,550,1650,550,550,550,550,550,500,600,1650,550,500,600,500,550,550,550,550,550,550,500,600,550,550,550,550,550,550,550,550,500,600,550,550,500,1650,550,1650,550,1650,550,550,550,1650,550,550,550,550,550,1600,600,550,500,1650,600,1600,550};
 const PROGMEM unsigned int irSignal_OffAr[] = {8200,4150,600,1650,500,550,600,500,550,550,550,1650,550,550,550,550,550,550,550,1650,550,1650,550,500,600,500,550,600,500,550,550,550,550,550,550,550,550,550,550,550,550,550,550,550,550,1600,600,550,500,1650,550,550,550,550,550,550,550,1650,550};
 
-const PROGMEM unsigned int irSignal_OnData[] = {8800,4450,500,600,500,600,500,600,500,600,500,600,500,600,500,600,550,550,550,550,500,600,500,600,550,550,550,1650,550,1650,550,550,550,550,550,550,550,1650,550,550,550,550,550,550,550,550,550,550,550,550,550,1650,550,550,550,1650,550,1650,550,1650,550,1650,550,1650,550,1650,550};
+const PROGMEM unsigned int irSignal_OnData[] = {8850,4450,500,600,500,600,500,600,500,600,500,600,500,600,500,600,500,600,500,600,500,600,500,600,550,550,550,1650,550,1650,550,550,550,550,550,550,550,1650,550,550,550,550,550,550,550,550,550,550,550,550,550,1650,550,550,550,1650,550,1650,550,1650,550,1650,550,1650,550,1650,550};
 const PROGMEM unsigned int irSignal_OffData[] = {8800,4450,500,600,500,600,500,600,500,600,500,600,500,600,500,600,550,550,550,550,500,600,500,600,550,550,550,1650,550,1650,550,550,550,550,550,550,550,1650,550,550,550,550,550,550,550,550,550,550,550,550,550,1650,550,550,550,1650,550,1650,550,1650,550,1650,550,1650,550,1650,550};
 
 const PROGMEM unsigned int irSignaltemp18[] = {8250,4150,550,1650,550,550,550,550,500,600,550,1650,500,600,500,600,500,550,550,600,500,550,550,550,550,550,550,1650,550,550,550,500,600,550,500,600,500,550,600,1650,500,1700,500,600,500,1650,550,550,550,550,550,1650,550,1650,500,1650,550,1700,500};
@@ -63,38 +66,114 @@ void setup(){
   SPI.begin();          //Inicia  SPI bus
   mfrc522.PCD_Init();   //Inicia MFRC522
   lcd.begin(16, 2);     //Inicializa o LCD 16x2
+  lcd.clear();             //Inicializa o LCD 16x2
+
+  pinMode(BUTTON1,INPUT);//Inicia Buttons
+  pinMode(BUTTON2,INPUT);//Inicia Buttons
+  pinMode(BUTTON3,INPUT);//Inicia Buttons
+  pinMode(BUTTON4,INPUT);//Inicia Buttons
  
   for (byte i = 0; i < 6; i++) key.keyByte[i] = 0xFF; //Prepara chave - padrao de fabrica = FFFFFFFFFFFFh
+
+  pinMode(LEDGREEN,OUTPUT); // Led
+  digitalWrite(LEDGREEN,LOW);
 }
  
+
+void nome_lcd(){
+  String var;
+  int len = 0;
+  
+  for( int i = 0; i< strlen(Id_nome);i++){
+    if(!(Id_nome[i] == ' ')){
+      var.concat(String(Id_nome[i]));
+      len++;
+    }
+  }
+  lcd.setCursor((16 - len)/2,0);
+  lcd.print(var);
+}
+
+void atributos_lcd(){
+  lcd.setCursor(1,1);
+  lcd.print("AR ");
+  lcd.setCursor(4,1);
+  if (condicao_AR == 0){
+    lcd.print("OFF");
+  }
+  else {
+    lcd.print(temp_AR);
+    //lcd.print("    dw");
+  }
+  lcd.setCursor(10,1);
+  lcd.print("DW ");
+  lcd.setCursor(13,1);
+  if (condicao_DW == 0){
+    lcd.print("OFF");
+  }
+  else {
+    lcd.print("ON");
+  }
+}
+
+
 void loop(){
 
   Serial.println("Sistema em Funcionamento");
 
   modo_leitura();
-
+ 
     Serial.println(teste_Validacao);
     Serial.println(code_UID);
     Serial.println(s_ArCondicionado);
     Serial.println(s_DataShow);
     Serial.println(Id_nome[0]);
-   
+  
   Serial.println("Leirura Realizada");
 
   if(teste_Validacao == "858069") // UPE
   {
+    digitalWrite(LEDGREEN,HIGH);
     Serial.println("Cartão Valido!");
-
     start_system();
+    nome_lcd();
+    atributos_lcd();
+    
     delay(2000);
 
-    while(function_exit() == false)
-    {
-      Serial.println("Em espera!");
+    while(function_exit() == false) {
+      
+      if(digitalRead(BUTTON1) == HIGH){
+        while (digitalRead(BUTTON1) == HIGH) {}
+        if(condicao_DW == 0) condicao_DW = 1;
+        else condicao_DW = 0;
 
-      delay(1000);
+        OnOff(condicao_DW,DW);
+        lcd.clear();
+        nome_lcd();
+        atributos_lcd();     
+      }
+
+      if( digitalRead(BUTTON2) == HIGH){
+        while ( digitalRead(BUTTON2) == HIGH) {}
+         
+         }
+         
+      if(digitalRead(BUTTON3) == HIGH){
+        while (digitalRead(BUTTON3) == HIGH){}
+        
+        }
+      if(digitalRead(BUTTON4) == HIGH){
+        while (digitalRead(BUTTON4) == HIGH){}
+        
+        }
+
+
+       //Serial.println("Em espera!");
+
 
     }
+
 
     shutdown_system();
   }
@@ -102,12 +181,11 @@ void loop(){
   {
     Serial.println("Cartão Invalido!");
   }
-  
+  digitalWrite(LEDGREEN,LOW);
   delay(1000);
   wdt_enable (WDTO_15MS);
   wdt_reset (); 
   delay(50);
-  
 }
 
 void start_system(){
@@ -129,8 +207,7 @@ void start_system(){
 
     OnOff(condicao_DW,DW);
   }
-
- }
+}
 
 
 void shutdown_system(){
@@ -150,7 +227,6 @@ void shutdown_system(){
 
     OnOff(condicao_DW,DW);
   }
-
 }
 
  
@@ -273,94 +349,150 @@ void modo_leitura(){
 
 void Temperatura (int temperatura_ar){
 
+  int len_temp = 59;
   int khz = 28;
-  
-  if (temperatura_ar == 18){
-/* unsigned int *irSignaltemp;
-    irSignaltemp = malloc( sizeof(irSignaltemp18) * sizeof(int) );
+  unsigned int irSignaltemp[len_temp];
 
-    for(int i = 0; i < sizeof(irSignaltemp18); i++)
+  if (temperatura_ar == 18){
+
+    for(int i = 0; i < len_temp; i++)
     {
       irSignaltemp[i] = pgm_read_word_near(irSignaltemp18 + i);
     }
-*/
-    irsend.sendRaw(irSignaltemp18, sizeof(irSignaltemp18) / sizeof(irSignaltemp18[0]), khz);
-   delay(50);
+
   }
   else if (temperatura_ar == 19){
 
-    irsend.sendRaw(irSignaltemp19, sizeof(irSignaltemp19) / sizeof(irSignaltemp19[0]), khz);
-    delay(50);
+    for(int i = 0; i < len_temp; i++)
+    {
+      irSignaltemp[i] = pgm_read_word_near(irSignaltemp19 + i);
+    }
+
   }
   else if (temperatura_ar == 20){
+    
+    for(int i = 0; i < len_temp; i++)
+    {
+      irSignaltemp[i] = pgm_read_word_near(irSignaltemp20 + i);
+    }
 
-    irsend.sendRaw(irSignaltemp20, sizeof(irSignaltemp20) / sizeof(irSignaltemp20[0]), khz);
-    delay(50);
   }
   else if (temperatura_ar == 21){
 
-    irsend.sendRaw(irSignaltemp21, sizeof(irSignaltemp21) / sizeof(irSignaltemp21[0]), khz);
-    delay(50);
+    for(int i = 0; i < len_temp; i++)
+    {
+      irSignaltemp[i] = pgm_read_word_near(irSignaltemp21 + i);
+    }
+
   }
   else if (temperatura_ar == 22){
 
-    irsend.sendRaw(irSignaltemp22, sizeof(irSignaltemp22) / sizeof(irSignaltemp22[0]), khz);
-    delay(50);
+    for(int i = 0; i < len_temp; i++)
+    {
+      irSignaltemp[i] = pgm_read_word_near(irSignaltemp22 + i);
+    }
+
   }
   else if (temperatura_ar == 23){
 
-    irsend.sendRaw(irSignaltemp23, sizeof(irSignaltemp23) / sizeof(irSignaltemp23[0]), khz);
-    delay(50);
+    for(int i = 0; i < len_temp; i++)
+    {
+      irSignaltemp[i] = pgm_read_word_near(irSignaltemp23 + i);
+    }
+
   }
   else if (temperatura_ar == 24){
 
-    irsend.sendRaw(irSignaltemp24, sizeof(irSignaltemp24) / sizeof(irSignaltemp24[0]), khz);
-    delay(50);
+    for(int i = 0; i < len_temp; i++)
+    {
+      irSignaltemp[i] = pgm_read_word_near(irSignaltemp24 + i);
+    }
+
   }
   else if (temperatura_ar == 25){
 
-    irsend.sendRaw(irSignaltemp25, sizeof(irSignaltemp25) / sizeof(irSignaltemp25[0]), khz);
-    delay(50);
+    for(int i = 0; i < len_temp; i++)
+    {
+      irSignaltemp[i] = pgm_read_word_near(irSignaltemp25 + i);
+    }
+
   }
   else if (temperatura_ar == 26){
 
-    irsend.sendRaw(irSignaltemp26, sizeof(irSignaltemp26) / sizeof(irSignaltemp26[0]), khz);
-    delay(50);
-  }
+    for(int i = 0; i < len_temp; i++)
+    {
+      irSignaltemp[i] = pgm_read_word_near(irSignaltemp26 + i);
+    }
+  }  
+    
+  irsend.sendRaw(irSignaltemp, sizeof(irSignaltemp) / sizeof(irSignaltemp[0]), khz);
+  delay(50);
 }
 
 void OnOff (int condicao, int aparelho){
-  int khz_DW = 32;
-  int khz_AR = 28;
+  int khz = 32;
+
+  int len_DW = 67;
+  int len_AR = 59;
+
+  unsigned int irSignalAR[len_AR];
+  unsigned int irSignalDW[len_DW];
   
   if (condicao == 1){
     if (aparelho == 0){
 
-      irsend.sendRaw(irSignal_OnAr, sizeof(irSignal_OnAr) / sizeof(irSignal_OnAr[0]), khz_AR);
-    }
-    else if (aparelho == 1){
 
-      irsend.sendRaw(irSignal_OnData, sizeof(irSignal_OnData) / sizeof(irSignal_OnData[0]), khz_DW);
+    for(int i = 0; i < len_AR ; i++)
+    {
+      irSignalAR[i] = pgm_read_word_near(irSignal_OnAr + i);
     }
-    delay(50);
+
+
+
+   irsend.sendRaw(irSignalAR, sizeof(irSignalAR) / sizeof(irSignalAR[0]), khz);
+   delay(1000);
+
+  }
+  else if (aparelho == 1){
+
+    for(int i = 0; i < len_DW ; i++)
+    {
+      irSignalDW[i] = pgm_read_word_near(irSignal_OnData + i);
+    }
+
+      irsend.sendRaw(irSignalDW, sizeof(irSignalDW) / sizeof(irSignalDW[0]), khz);
+      delay(1000);
+    }
+    
   }
   else {
     if (aparelho == 0){
 
-      irsend.sendRaw(irSignal_OffAr, sizeof(irSignal_OffAr) / sizeof(irSignal_OffAr[0]), khz_AR);
+    for(int i = 0; i < len_AR ; i++){
+      irSignalAR[i] = pgm_read_word_near(irSignal_OffAr + i);
     }
-    else if (aparelho == 1){
-
-      irsend.sendRaw(irSignal_OffData, sizeof(irSignal_OffData) / sizeof(irSignal_OffData[0]), khz_DW);    
-    }
+    irsend.sendRaw(irSignalAR, sizeof(irSignalAR) / sizeof(irSignalAR[0]), khz);
     delay(50);
+    }
+
+    else if (aparelho == 1){
+      for(int i = 0; i < len_DW ; i++){
+        irSignalDW[i] = pgm_read_word_near(irSignal_OffData + i);
+      }
+
+      irsend.sendRaw(irSignalDW, sizeof(irSignalDW) / sizeof(irSignalDW[0]), khz); 
+      delay(500);   
+      irsend.sendRaw(irSignalDW, sizeof(irSignalDW) / sizeof(irSignalDW[0]), khz);
+      delay(500);
+    }
+    
   }
 }
 
 bool function_exit(){
 
   // -- Aguarda um cartão --
-
+ 
   if( ! mfrc522.PICC_IsNewCardPresent())
   {
     return false;
